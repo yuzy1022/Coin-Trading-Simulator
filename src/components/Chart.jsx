@@ -182,6 +182,20 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
         fixLeftEdge: false,
         fixRightEdge: false,
       },
+      // 스크롤 및 스케일(확대/축소) 옵션 추가
+      handleScroll: {
+        mouseWheel: true, // 마우스 휠로 차트 좌우 스크롤
+        pressedMouseMove: true, // 마우스 누르고 움직여서 스크롤
+      },
+      handleScale: {
+        mouseWheel: true, // 마우스 휠로 확대/축소 (가격 축 또는 시간 축 위에서)
+        axisPressedMouseMove: { // 축을 누르고 움직여서 확대/축소
+            time: true,
+            price: true,
+        },
+        axisDoubleClickReset: true, // 축 더블클릭 시 리셋
+        pinch: true, // 핀치 제스처로 확대/축소
+      },
     });
     chartRef.current = chart;
 
@@ -699,7 +713,7 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
 
   return (
     <div>
-      <div className="mb-4" style={{ minHeight: '120px' }}>
+      <div className="mb-4" style={{ minHeight: '80px' }}>
         <div className="flex justify-between items-start mb-2">
           <div style={{ flex: 1 }}>
             {renderCandleInfo()}
@@ -709,7 +723,7 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
             <button
               className={`btn btn-sm ${isDrawing ? 'btn-danger' : 'btn-secondary'}`}
               onClick={toggleDrawingMode}
-              style={{ padding: '8px' }}
+              style={{ marginLeft: '8px', padding: '8px' }}
             >
               <PenLine size={16} />
               {isDrawing ? '취소' : '추세선'}
@@ -717,19 +731,18 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
             <button
               className="btn btn-sm btn-secondary"
               onClick={handleDeleteLastLine}
-              style={{ padding: '8px' }}
+              style={{ marginLeft: '8px', padding: '8px' }}
             >
               <Trash2 size={16} />
             </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowSettings(!showSettings)}
+              style={{ marginLeft: '8px', padding: '8px' }}
+            >
+              <Settings size={16} />
+            </button>
           </div>
-
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowSettings(!showSettings)}
-            style={{ marginLeft: '16px', padding: '8px' }}
-          >
-            <Settings size={16} />
-          </button>
         </div>
 
         {/* 이동평균선 설정 패널 */}
