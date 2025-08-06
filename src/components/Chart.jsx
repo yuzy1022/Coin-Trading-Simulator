@@ -7,6 +7,7 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
   const priceLineRef = useRef(null); // 청산가 라인을 위한 ref 추가
+  const entryPriceLineRef = useRef(null); //매수가 라인을 위한 ref 추가
   const volumeSeriesRef = useRef();
   const maSeriesRefs = useRef({});
   const dataRef = useRef(data);
@@ -514,24 +515,45 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
   useEffect(() => {
     if (!candlestickSeriesRef.current) return;
 
-    // 기존 라인 제거
+    // --- 기존 라인들 모두 제거 ---
+    // 청산가 라인 제거
     if (priceLineRef.current) {
         candlestickSeriesRef.current.removePriceLine(priceLineRef.current);
         priceLineRef.current = null;
     }
-
-    // 포지션과 청산가가 있으면 새 라인 생성
-    if (position && position.liquidationPrice) {
-      priceLineRef.current = candlestickSeriesRef.current.createPriceLine({
-        price: position.liquidationPrice,
-        color: '#ef4444', // 빨간색
-        lineWidth: 2,
-        lineStyle: 2, // 0: Solid, 1: Dotted, 2: Dashed, 3: LargeDashed
-        axisLabelVisible: true,
-        title: '청산가',
-      });
+    // 매수가 라인 제거
+    if (entryPriceLineRef.current) {
+        candlestickSeriesRef.current.removePriceLine(entryPriceLineRef.current);
+        entryPriceLineRef.current = null;
     }
-  }, [position]); // position이 변경될 때마다 실행
+
+    // --- 포지션이 있을 경우 새 라인들 생성 ---
+    if (position) {
+      // 1. 평균 매수가(avgPrice) 라인 생성 (신규 추가)
+      if (position.avgPrice) {
+        entryPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
+          price: position.avgPrice,
+          color: '#3b82f6', // 파란색
+          lineWidth: 2,
+          lineStyle: 2, // 1: Dotted (점선)
+          axisLabelVisible: true,
+          title: '매수가',
+        });
+      }
+
+      // 2. 청산가(liquidationPrice) 라인 생성 (기존 로직)
+      if (position.liquidationPrice) {
+        priceLineRef.current = candlestickSeriesRef.current.createPriceLine({
+          price: position.liquidationPrice,
+          color: '#ef4444', // 빨간색
+          lineWidth: 2,
+          lineStyle: 2, // 2: Dashed (대시선)
+          axisLabelVisible: true,
+          title: '청산가',
+        });
+      }
+    }
+  }, [position]); // position 객체가 변경될 때마다 실행
 
   // 이동평균선 설정 변경 함수들
   const toggleMAVisibility = (id) => {
