@@ -241,34 +241,48 @@ const TradingScreen = ({ config, data, onEndGame }) => {
   };
 
   const closePosition = (closeQuantity) => {
-    if (!position || closeQuantity <= 0 || closeQuantity > position.totalQuantity || !currentPrice || currentPrice <= 0) return;
+    // 수량 유효성 검사 (부동소수점 오차를 감안하여 closeQuantity가 미세하게 더 큰 경우도 허용)
+    if (!position || closeQuantity <= 0 || (closeQuantity - position.totalQuantity > 0.00000001) || !currentPrice || currentPrice <= 0) return;
     
-    const pnl = position.type === 'long' 
-      ? (currentPrice - position.avgPrice) * closeQuantity
-      : (position.avgPrice - currentPrice) * closeQuantity;
+    // 실제 청산 수량이 보유 수량을 초과하지 않도록 보정
+    const finalCloseQuantity = Math.min(closeQuantity, position.totalQuantity);
 
-    const closeValue = currentPrice * closeQuantity;
+    const pnl = position.type === 'long' 
+      ? (currentPrice - position.avgPrice) * finalCloseQuantity
+      : (position.avgPrice - currentPrice) * finalCloseQuantity;
+
+    const closeValue = currentPrice * finalCloseQuantity;
     const fee = closeValue * 0.0005;
     
-    const marginToReturn = position.margin * (closeQuantity / position.totalQuantity);
+    // totalQuantity가 0이 되는 경우를 대비하여 0으로 나누는 것을 방지
+    const marginToReturn = position.totalQuantity > 0 
+      ? position.margin * (finalCloseQuantity / position.totalQuantity)
+      : position.margin;
+
     const newBalance = balance + marginToReturn + pnl - fee;
     setBalance(newBalance);
     
-    const trade = { ...position, totalQuantity: closeQuantity, exitPrice: currentPrice, exitTimestamp: currentCandle?.timestamp, pnl, balanceAfter: newBalance, status: 'Closed' };
+    const trade = { ...position, totalQuantity: finalCloseQuantity, exitPrice: currentPrice, exitTimestamp: currentCandle?.timestamp, pnl, balanceAfter: newBalance, status: 'Closed' };
     setTrades(prev => [...prev, trade]);
     
-    const remainingQuantity = position.totalQuantity - closeQuantity;
-    if (remainingQuantity < 0.0001) {
+    // --- BUG FIX START: 부동소수점 오차 해결 ---
+    // 남은 수량을 계산하고, toPrecision을 사용해 유효 숫자를 정리한 후 숫자로 변환합니다.
+    const remainingQuantity = parseFloat((position.totalQuantity - finalCloseQuantity).toPrecision(12));
+    
+    // 남은 수량이 매우 작으면 (거의 0이면) 포지션을 완전히 종료합니다.
+    if (remainingQuantity < 0.00001) {
       setPosition(null);
       setLiquidationPrice(null);
     } else {
-      const remainingMargin = position.margin - marginToReturn;
+      // 남은 증거금도 같은 방식으로 오차를 정리합니다.
+      const remainingMargin = parseFloat((position.margin - marginToReturn).toPrecision(12));
       setPosition({
         ...position,
-        totalQuantity: remainingQuantity,
+        totalQuantity: remainingQuantity, // 정리된 값을 state에 저장
         margin: remainingMargin, 
       });
     }
+    // --- BUG FIX END ---
   };
 
   // useCallback으로 togglePlay 함수를 메모이제이션하여 불필요한 재생성을 방지합니다.
