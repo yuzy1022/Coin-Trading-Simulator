@@ -30,10 +30,10 @@ const TradingScreen = ({ config, data, onEndGame }) => {
 
   const timeframes = getAvailableTimeframes();
   const currentTimeframe = timeframes.find(t => t.value === config.selectedTimeframe);
-  const tradingStartTime = data && data[tradingStartIndex] ? data[tradingStartIndex].timestamp : null;
-  const tradingEndTime = data && data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)] 
-    ? data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)].timestamp 
-    : null;
+  const tradingStartTime = data && data[tradingStartIndex - 1] ? data[tradingStartIndex - 1].timestamp : null;
+  // const tradingEndTime = data && data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)] 
+  //   ? data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)].timestamp 
+  //   : null;
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -133,21 +133,39 @@ const TradingScreen = ({ config, data, onEndGame }) => {
       finalTrades = [...trades, finalTrade];
     }
 
+		// 게임이 종료되는 시점의 캔들에서 타임스탬프를 가져옵니다.
+    const actualEndTime = currentCandle ? currentCandle.timestamp : null;
+    
     const totalReturn = ((finalBalance - config.initialBalance) / config.initialBalance) * 100;
     
-    // 이 부분은 App.jsx로 전달될 최종 결과 데이터입니다. 필요에 따라 내용을 채워주세요.
     onEndGame({
       initialBalance: config.initialBalance,
       finalBalance,
       totalReturn,
       totalTrades: finalTrades.length,
-      maxDrawdown: 0, // MDD 계산 로직은 추가 구현이 필요합니다.
+      maxDrawdown: 0,
       trades: finalTrades,
       tradingStartTime,
-      tradingEndTime,
+      tradingEndTime: actualEndTime, // 기존 변수 대신 실제 종료 시간(actualEndTime)을 전달합니다.
       coinSymbol: config.selectedCoin,
       timeframe: currentTimeframe?.label || config.selectedTimeframe,
     });
+		
+    // const totalReturn = ((finalBalance - config.initialBalance) / config.initialBalance) * 100;
+    
+    // // 이 부분은 App.jsx로 전달될 최종 결과 데이터입니다. 필요에 따라 내용을 채워주세요.
+    // onEndGame({
+    //   initialBalance: config.initialBalance,
+    //   finalBalance,
+    //   totalReturn,
+    //   totalTrades: finalTrades.length,
+    //   maxDrawdown: 0, // MDD 계산 로직은 추가 구현이 필요합니다.
+    //   trades: finalTrades,
+    //   tradingStartTime,
+    //   tradingEndTime,
+    //   coinSymbol: config.selectedCoin,
+    //   timeframe: currentTimeframe?.label || config.selectedTimeframe,
+    // });
   };
 
   const openPosition = (type, quantity) => {
@@ -316,6 +334,31 @@ const TradingScreen = ({ config, data, onEndGame }) => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [togglePlay]); // 최적화된 togglePlay 함수를 의존성 배열에 추가
+
+	//잔고 부족 시 게임 자동 종료 기능 추가 ---
+  useEffect(() => {
+    // 게임이 이미 종료되었거나, 포지션을 보유 중이거나, 현재 가격 정보가 없으면 검사하지 않음
+    if (gameEndedRef.current || position || !currentPrice || currentPrice <= 0) {
+      return;
+    }
+
+    // 최소 거래 수량(0.0001)에 필요한 최소 증거금 계산
+    const minPositionValue = currentPrice * 0.0001;
+    const minMarginRequired = minPositionValue / leverage;
+    const minFee = minPositionValue * 0.0005;
+
+    // 현재 잔고가 (최소 증거금 + 예상 수수료)보다 적은지 확인
+    if (balance > 0 && balance < (minMarginRequired + minFee)) {
+      gameEndedRef.current = true; // 게임 종료 상태로 변경
+      
+      // 사용자에게 알림
+      setTimeout(() => {
+        alert('잔고가 부족하여 더 이상 거래를 진행할 수 없습니다. 게임을 종료합니다.');
+        // 최종 결과 계산 함수 호출
+        calculateResults();
+      }, 100); // alert가 다른 로직과 겹치지 않도록 약간의 지연을 줌
+    }
+  }, [balance, position, currentPrice, leverage, calculateResults]); // 의존성 배열에 필요한 모든 변수 추가
 
   const changeSpeed = (speed) => {
     setPlaybackSpeed(speed);

@@ -29,7 +29,7 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
   
   // 기본 이동평균선 설정
   const defaultMASettings = [
-    { id: 'ma7', period: 7, color: '#ff6b6b', visible: true, name: 'MA5', opacity: 1.0 },
+    { id: 'ma7', period: 7, color: '#ff6b6b', visible: true, name: 'MA7', opacity: 1.0 },
     { id: 'ma15', period: 15, color: '#4ecdc4', visible: true, name: 'MA15', opacity: 1.0 },
     { id: 'ma30', period: 30, color: '#45b7d1', visible: true, name: 'MA30', opacity: 1.0 },
     { id: 'ma60', period: 60, color: '#f9ca24', visible: false, name: 'MA60', opacity: 1.0 },
@@ -209,6 +209,7 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
       wickDownColor: '#ef4444',
       wickUpColor: '#10b981',
       priceScaleId: 'right',
+      title: '현재가',
     });
 
     // 거래량 차트 먼저 추가 (가장 아래)
@@ -473,9 +474,9 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
             color: getColorWithOpacity(maSetting.color, maSetting.opacity),
             lineWidth: 2,
             priceScaleId: 'right',
-            title: maSetting.name,
+            // title: maSetting.name,
             crosshairMarkerVisible: false, // 십자선 마커 제거
-            lastValueVisible: true, // 우측 가격 라벨 표시
+            lastValueVisible: false, // 우측 가격 라벨 숨김
             priceLineVisible: false, // 현재 가격 점선은 숨김
           });
           series.setData(maData);
