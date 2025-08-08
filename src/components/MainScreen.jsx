@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, TrendingUp } from 'lucide-react';
 import { getAvailableTimeframes, calculateEstimatedPeriod } from '../utils/binanceApi';
 
@@ -7,22 +7,73 @@ const MainScreen = ({ onStartGame }) => {
   const [selectedCoin, setSelectedCoin] = useState('BTC');
   const [selectedTimeframe, setSelectedTimeframe] = useState('4h');
 
+	const today = new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState('2020-01-01');
+  const [endDate, setEndDate] = useState(today);
+  const [dateError, setDateError] = useState('');
+
   const coins = [
     { symbol: 'BTC', name: '비트코인' },
     { symbol: 'ETH', name: '이더리움' },
+		{ symbol: 'XRP', name: '리플' },
+		{ symbol: 'SOL', name: '솔라나' },
     { symbol: 'BNB', name: '바이낸스 코인' },
-    { symbol: 'ADA', name: '카르다노' }
+    { symbol: 'ADA', name: '카르다노' },
   ];
 
   const timeframes = getAvailableTimeframes();
   const estimatedPeriod = calculateEstimatedPeriod(selectedTimeframe, tradingPeriod);
+
+	useEffect(() => {
+    const startMs = new Date(startDate).getTime();
+    const endMs = new Date(endDate).getTime();
+    const timeframeInfo = timeframes.find(t => t.value === selectedTimeframe);
+    const timeframeMs = timeframeInfo?.ms || 0;
+    
+    // --- 1. 최소 시작일 유효성 검사  ---
+    const binanceLaunchMs = new Date('2017-01-01').getTime();
+    const requiredHistoryMs = 1000 * timeframeMs; // 이전 1000개 캔들에 필요한 시간
+    const earliestSelectableDateMs = binanceLaunchMs + requiredHistoryMs;
+
+    if (startMs < earliestSelectableDateMs) {
+      const earliestDate = new Date(earliestSelectableDateMs);
+      setDateError(`시작일이 너무 이릅니다. ${timeframeInfo?.label} 기준 1000개 과거 데이터를 위해, 시작일은 ${earliestDate.toLocaleDateString('ko-KR')} 이후여야 합니다.`);
+      return; // 검사 종료
+    }
+
+    // --- 2. 종료일이 시작일보다 빠른지 검사 ---
+    if (startMs >= endMs) {
+      setDateError('종료일은 시작일보다 이후여야 합니다.');
+      return; // 검사 종료
+    }
+
+    // --- 3. 설정한 기간이 플레이할 캔들 수에 비해 짧은지 검사 ---
+    const selectedRangeMs = endMs - startMs;
+    const requiredMs = tradingPeriod * timeframeMs;
+    
+    if (selectedRangeMs < requiredMs) {
+      const requiredDays = Math.ceil(requiredMs / (1000 * 60 * 60 * 24));
+      setDateError(`플레이 기간이 너무 짧습니다. ${tradingPeriod}개의 ${timeframeInfo?.label}을(를) 위해서는 최소 ${requiredDays}일의 기간이 필요합니다.`);
+    } else {
+      // 모든 검사를 통과하면 에러 메시지 초기화
+      setDateError('');
+    }
+  }, [startDate, endDate, tradingPeriod, selectedTimeframe, timeframes]);
     
   const handleStart = () => {
+    // 유효성 검사 에러가 있으면 게임 시작 방지
+    if (dateError) {
+      alert(dateError);
+      return;
+    }
+
     onStartGame({
       tradingPeriod,
       selectedCoin,
       selectedTimeframe,
-      initialBalance: 10000
+      initialBalance: 10000,
+      startDate, // 시작일 전달
+      endDate,   // 종료일 전달
     });
   };
 
@@ -70,8 +121,31 @@ const MainScreen = ({ onStartGame }) => {
             </select>
           </div>
 
+					<div>
+            <label className="block mb-2 font-bold">플레이 기간 설정</label>
+            <div className="grid grid-2 gap-2">
+              <input
+                type="date"
+                className="input"
+                value={startDate}
+                min="2017-01-01"
+                max={endDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+              <input
+                type="date"
+                className="input"
+                value={endDate}
+                min={startDate}
+                max={today}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            {dateError && <p className="text-sm mt-2 text-red">{dateError}</p>}
+          </div>
+					
           <div>
-            <label className="block mb-2 font-bold">매매 기간 설정</label>
+            <label className="block mb-2 font-bold">매매 기간 설정 (캔들수)</label>
             <div className="flex items-center gap-4">
               <input
                 type="range"
@@ -85,7 +159,7 @@ const MainScreen = ({ onStartGame }) => {
               <span className="text-lg font-bold">{tradingPeriod} 캔들</span>
             </div>
             <p className="text-sm mt-2" style={{ color: '#9ca3af' }}>
-              {estimatedPeriod} 분량의 {timeframes.find(t => t.value === selectedTimeframe)?.label} 데이터 (실제 과거 데이터)
+              {startDate} ~ {endDate} 기간 내 랜덤한 {estimatedPeriod} 분량의 {timeframes.find(t => t.value === selectedTimeframe)?.label} 데이터
             </p>
           </div>
 
@@ -111,6 +185,7 @@ const MainScreen = ({ onStartGame }) => {
             className="btn btn-primary" 
             style={{ width: '100%', marginTop: '20px' }}
             onClick={handleStart}
+						disabled={!!dateError}
           >
             <Play size={20} />
             게임 시작

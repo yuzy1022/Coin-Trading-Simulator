@@ -6,8 +6,8 @@ import PositionInfo from './PositionInfo';
 import { TrendingUp, Clock, DollarSign, Zap } from 'lucide-react';
 import { getAvailableTimeframes } from '../utils/binanceApi';
 
-const TradingScreen = ({ config, data, onEndGame }) => {
-  const [currentIndex, setCurrentIndex] = useState(999);
+const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
+  const [currentIndex, setCurrentIndex] = useState(startIndex - 1); // 게임 시작 시, 플레이할 캔들 바로 이전 캔들부터 보여주기 위해 -1을 합니다.
   const [balance, setBalance] = useState(config.initialBalance);
   const [position, setPosition] = useState(null);
   const [trades, setTrades] = useState([]);
@@ -23,7 +23,7 @@ const TradingScreen = ({ config, data, onEndGame }) => {
   const currentCandle = isDataValid ? data[currentIndex] : null;
   const currentPrice = currentCandle ? currentCandle.close : 0;
   
-  const tradingStartIndex = 1000;
+  const tradingStartIndex = startIndex;
   const tradingProgress = Math.max(0, currentIndex - tradingStartIndex + 1);
   const remainingCandles = Math.max(0, config.tradingPeriod - tradingProgress);
   const progress = (tradingProgress / config.tradingPeriod) * 100;
@@ -34,6 +34,11 @@ const TradingScreen = ({ config, data, onEndGame }) => {
   // const tradingEndTime = data && data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)] 
   //   ? data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)].timestamp 
   //   : null;
+
+	const truncate = (num, decimals) => {
+	  const factor = Math.pow(10, decimals);
+	  return Math.floor(num * factor) / factor;
+	};
 
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -169,9 +174,12 @@ const TradingScreen = ({ config, data, onEndGame }) => {
   };
 
   const openPosition = (type, quantity) => {
-    if (!currentPrice || currentPrice <= 0 || quantity <= 0) return;
+    // 전달받은 수량이 이미 정리되었겠지만, 안전을 위해 한 번 더 정리
+    const cleanQuantity = truncate(quantity, 4);
 
-    const positionValue = currentPrice * quantity;
+    if (!currentPrice || currentPrice <= 0 || cleanQuantity <= 0) return;
+
+    const positionValue = currentPrice * cleanQuantity;
     const margin = positionValue / leverage;
     const fee = positionValue * 0.0005;
 
@@ -181,9 +189,8 @@ const TradingScreen = ({ config, data, onEndGame }) => {
     }
 
     if (!position) {
-      // --- 새 포지션 진입 ---
       let liqPrice;
-      const maintenanceMarginRatio = 0.005; // 유지 증거금 비율 (BTC 기준 0.5%)
+			const maintenanceMarginRatio = 0.005;
       
       if (marginType === 'isolated') {
         if (type === 'long') {
@@ -193,36 +200,31 @@ const TradingScreen = ({ config, data, onEndGame }) => {
         }
       } else { // cross
         if (type === 'long') {
-          liqPrice = currentPrice - ((margin + balance) / quantity);
+          liqPrice = currentPrice - ((margin + balance) / cleanQuantity);
         } else {
-          liqPrice = currentPrice + ((margin + balance) / quantity);
+          liqPrice = currentPrice + ((margin + balance) / cleanQuantity);
         }
       }
       setLiquidationPrice(liqPrice);
-      
+
       setPosition({
         type,
-        totalQuantity: quantity,
+        totalQuantity: cleanQuantity, // 정리된 수량 저장
         avgPrice: currentPrice,
         entryTimestamp: currentCandle?.timestamp,
-        trades: [{ quantity, price: currentPrice }],
-        leverage,
-        margin,
-        liquidationPrice: liqPrice,
-        marginType,
-        entryIndex: currentIndex,
+        trades: [{ quantity: cleanQuantity, price: currentPrice }],
+        leverage, margin, liquidationPrice: liqPrice, marginType, entryIndex: currentIndex,
       });
 
     } else if (position.type === type) {
-      // --- 기존 포지션에 추가 (물타기) ---
-      const newTotalQuantity = position.totalQuantity + quantity;
-      const newAvgPrice = ((position.avgPrice * position.totalQuantity) + (currentPrice * quantity)) / newTotalQuantity;
+      // 수량을 더할 때도 계산 후 즉시 정리
+      const newTotalQuantity = truncate(position.totalQuantity + cleanQuantity, 4);
+      const newAvgPrice = ((position.avgPrice * position.totalQuantity) + (currentPrice * cleanQuantity)) / newTotalQuantity;
       const newTotalMargin = position.margin + margin;
       
       let newLiqPrice;
-      const maintenanceMarginRatio = 0.005;
+			const maintenanceMarginRatio = 0.005;
 
-      // --- BUG FIX START: 숏 포지션 청산가 계산 로직 추가 ---
       if (marginType === 'isolated') {
         if (type === 'long') {
           newLiqPrice = newAvgPrice * (1 - (1 / leverage) + maintenanceMarginRatio);
@@ -230,24 +232,23 @@ const TradingScreen = ({ config, data, onEndGame }) => {
           newLiqPrice = newAvgPrice * (1 + (1 / leverage) - maintenanceMarginRatio);
         }
       } else { // cross
-        const availableBalanceForLiq = balance; // 현재 거래의 증거금이 차감되기 전 잔고
+        const availableBalanceForLiq = balance;
         if (type === 'long') {
           newLiqPrice = newAvgPrice - ((newTotalMargin + availableBalanceForLiq) / newTotalQuantity);
         } else { // 'short'
           newLiqPrice = newAvgPrice + ((newTotalMargin + availableBalanceForLiq) / newTotalQuantity);
         }
       }
-      // --- BUG FIX END ---
 
       setLiquidationPrice(newLiqPrice);
 
       setPosition({
         ...position,
-        totalQuantity: newTotalQuantity,
+        totalQuantity: newTotalQuantity, // 정리된 총 수량 저장
         avgPrice: newAvgPrice,
         margin: newTotalMargin,
         liquidationPrice: newLiqPrice,
-        trades: [...position.trades, { quantity, price: currentPrice }]
+        trades: [...position.trades, { quantity: cleanQuantity, price: currentPrice }]
       });
 
     } else {
@@ -346,9 +347,9 @@ const TradingScreen = ({ config, data, onEndGame }) => {
     const minPositionValue = currentPrice * 0.0001;
     const minMarginRequired = minPositionValue / leverage;
     const minFee = minPositionValue * 0.0005;
-
+	
     // 현재 잔고가 (최소 증거금 + 예상 수수료)보다 적은지 확인
-    if (balance > 0 && balance < (minMarginRequired + minFee)) {
+    if (balance < (minMarginRequired + minFee)) {
       gameEndedRef.current = true; // 게임 종료 상태로 변경
       
       // 사용자에게 알림

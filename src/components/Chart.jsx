@@ -244,8 +244,8 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
     });
 
     try {
-      const savedLines = JSON.parse(localStorage.getItem('trendLines') || '[]');
-      setTrendLines(savedLines);
+      // const savedLines = JSON.parse(localStorage.getItem('trendLines') || '[]');
+      // setTrendLines(savedLines);
     } catch (e) { console.error("Failed to parse trendLines", e); setTrendLines([]); }
     
     // 클릭 이벤트 핸들러 (그리기 / 선택 / 드래그)
