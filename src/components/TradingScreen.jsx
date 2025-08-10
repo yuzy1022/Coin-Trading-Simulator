@@ -7,7 +7,7 @@ import { TrendingUp, Clock, DollarSign, Zap } from 'lucide-react';
 import { getAvailableTimeframes } from '../utils/binanceApi';
 
 const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
-  const [currentIndex, setCurrentIndex] = useState(startIndex - 1); // 게임 시작 시, 플레이할 캔들 바로 이전 캔들부터 보여주기 위해 -1을 합니다.
+  const [currentIndex, setCurrentIndex] = useState(startIndex - 1);
   const [balance, setBalance] = useState(config.initialBalance);
   const [position, setPosition] = useState(null);
   const [trades, setTrades] = useState([]);
@@ -31,9 +31,6 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
   const timeframes = getAvailableTimeframes();
   const currentTimeframe = timeframes.find(t => t.value === config.selectedTimeframe);
   const tradingStartTime = data && data[tradingStartIndex - 1] ? data[tradingStartIndex - 1].timestamp : null;
-  // const tradingEndTime = data && data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)] 
-  //   ? data[Math.min(tradingStartIndex + config.tradingPeriod - 1, data.length - 1)].timestamp 
-  //   : null;
 
 	const truncate = (num, decimals) => {
 	  const factor = Math.pow(10, decimals);
@@ -138,7 +135,6 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
       finalTrades = [...trades, finalTrade];
     }
 
-		// 게임이 종료되는 시점의 캔들에서 타임스탬프를 가져옵니다.
     const actualEndTime = currentCandle ? currentCandle.timestamp : null;
     
     const totalReturn = ((finalBalance - config.initialBalance) / config.initialBalance) * 100;
@@ -151,30 +147,13 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
       maxDrawdown: 0,
       trades: finalTrades,
       tradingStartTime,
-      tradingEndTime: actualEndTime, // 기존 변수 대신 실제 종료 시간(actualEndTime)을 전달합니다.
+      tradingEndTime: actualEndTime,
       coinSymbol: config.selectedCoin,
       timeframe: currentTimeframe?.label || config.selectedTimeframe,
     });
-		
-    // const totalReturn = ((finalBalance - config.initialBalance) / config.initialBalance) * 100;
-    
-    // // 이 부분은 App.jsx로 전달될 최종 결과 데이터입니다. 필요에 따라 내용을 채워주세요.
-    // onEndGame({
-    //   initialBalance: config.initialBalance,
-    //   finalBalance,
-    //   totalReturn,
-    //   totalTrades: finalTrades.length,
-    //   maxDrawdown: 0, // MDD 계산 로직은 추가 구현이 필요합니다.
-    //   trades: finalTrades,
-    //   tradingStartTime,
-    //   tradingEndTime,
-    //   coinSymbol: config.selectedCoin,
-    //   timeframe: currentTimeframe?.label || config.selectedTimeframe,
-    // });
   };
 
   const openPosition = (type, quantity) => {
-    // 전달받은 수량이 이미 정리되었겠지만, 안전을 위해 한 번 더 정리
     const cleanQuantity = truncate(quantity, 4);
 
     if (!currentPrice || currentPrice <= 0 || cleanQuantity <= 0) return;
@@ -209,7 +188,7 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
 
       setPosition({
         type,
-        totalQuantity: cleanQuantity, // 정리된 수량 저장
+        totalQuantity: cleanQuantity,
         avgPrice: currentPrice,
         entryTimestamp: currentCandle?.timestamp,
         trades: [{ quantity: cleanQuantity, price: currentPrice }],
@@ -217,7 +196,6 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
       });
 
     } else if (position.type === type) {
-      // 수량을 더할 때도 계산 후 즉시 정리
       const newTotalQuantity = truncate(position.totalQuantity + cleanQuantity, 4);
       const newAvgPrice = ((position.avgPrice * position.totalQuantity) + (currentPrice * cleanQuantity)) / newTotalQuantity;
       const newTotalMargin = position.margin + margin;
@@ -244,7 +222,7 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
 
       setPosition({
         ...position,
-        totalQuantity: newTotalQuantity, // 정리된 총 수량 저장
+        totalQuantity: newTotalQuantity,
         avgPrice: newAvgPrice,
         margin: newTotalMargin,
         liquidationPrice: newLiqPrice,
@@ -260,10 +238,8 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
   };
 
   const closePosition = (closeQuantity) => {
-    // 수량 유효성 검사 (부동소수점 오차를 감안하여 closeQuantity가 미세하게 더 큰 경우도 허용)
     if (!position || closeQuantity <= 0 || (closeQuantity - position.totalQuantity > 0.00000001) || !currentPrice || currentPrice <= 0) return;
     
-    // 실제 청산 수량이 보유 수량을 초과하지 않도록 보정
     const finalCloseQuantity = Math.min(closeQuantity, position.totalQuantity);
 
     const pnl = position.type === 'long' 
@@ -273,7 +249,6 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
     const closeValue = currentPrice * finalCloseQuantity;
     const fee = closeValue * 0.0005;
     
-    // totalQuantity가 0이 되는 경우를 대비하여 0으로 나누는 것을 방지
     const marginToReturn = position.totalQuantity > 0 
       ? position.margin * (finalCloseQuantity / position.totalQuantity)
       : position.margin;
@@ -284,82 +259,60 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
     const trade = { ...position, totalQuantity: finalCloseQuantity, exitPrice: currentPrice, exitTimestamp: currentCandle?.timestamp, pnl, balanceAfter: newBalance, status: 'Closed' };
     setTrades(prev => [...prev, trade]);
     
-    // --- BUG FIX START: 부동소수점 오차 해결 ---
-    // 남은 수량을 계산하고, toPrecision을 사용해 유효 숫자를 정리한 후 숫자로 변환합니다.
     const remainingQuantity = parseFloat((position.totalQuantity - finalCloseQuantity).toPrecision(12));
     
-    // 남은 수량이 매우 작으면 (거의 0이면) 포지션을 완전히 종료합니다.
     if (remainingQuantity < 0.00001) {
       setPosition(null);
       setLiquidationPrice(null);
     } else {
-      // 남은 증거금도 같은 방식으로 오차를 정리합니다.
       const remainingMargin = parseFloat((position.margin - marginToReturn).toPrecision(12));
       setPosition({
         ...position,
-        totalQuantity: remainingQuantity, // 정리된 값을 state에 저장
+        totalQuantity: remainingQuantity,
         margin: remainingMargin, 
       });
     }
-    // --- BUG FIX END ---
   };
 
-  // useCallback으로 togglePlay 함수를 메모이제이션하여 불필요한 재생성을 방지합니다.
   const togglePlay = useCallback(() => {
-    // 데이터가 유효할 때만 재생/일시정지 상태 변경
     if (isDataValid && currentPrice > 0) {
       setIsPlaying(prevIsPlaying => !prevIsPlaying);
     }
-  }, [isDataValid, currentPrice]); // isDataValid와 currentPrice가 변경될 때만 함수를 재생성
+  }, [isDataValid, currentPrice]);
 
-  // 스페이스바를 통한 재생/일시정지 기능
   useEffect(() => {
     const handleKeyDown = (event) => {
-      // 입력 필드에 포커스가 있을 때는 스페이스바 이벤트를 무시
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
         return;
       }
-
-      // 스페이스바를 눌렀을 때
       if (event.code === 'Space') {
-        event.preventDefault(); // 스크롤 등 기본 동작 방지
-        togglePlay(); // 재생/일시정지 함수 호출
+        event.preventDefault();
+        togglePlay();
       }
     };
-
-    // 컴포넌트가 마운트될 때 이벤트 리스너 추가
     window.addEventListener('keydown', handleKeyDown);
-
-    // 컴포넌트가 언마운트될 때 이벤트 리스너 제거
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [togglePlay]); // 최적화된 togglePlay 함수를 의존성 배열에 추가
+  }, [togglePlay]);
 
-	//잔고 부족 시 게임 자동 종료 기능 추가 ---
   useEffect(() => {
-    // 게임이 이미 종료되었거나, 포지션을 보유 중이거나, 현재 가격 정보가 없으면 검사하지 않음
     if (gameEndedRef.current || position || !currentPrice || currentPrice <= 0) {
       return;
     }
 
-    // 최소 거래 수량(0.0001)에 필요한 최소 증거금 계산
     const minPositionValue = currentPrice * 0.0001;
     const minMarginRequired = minPositionValue / leverage;
     const minFee = minPositionValue * 0.0005;
 	
-    // 현재 잔고가 (최소 증거금 + 예상 수수료)보다 적은지 확인
     if (balance < (minMarginRequired + minFee)) {
-      gameEndedRef.current = true; // 게임 종료 상태로 변경
-      
-      // 사용자에게 알림
+      gameEndedRef.current = true;
       setTimeout(() => {
         alert('잔고가 부족하여 더 이상 거래를 진행할 수 없습니다. 게임을 종료합니다.');
-        // 최종 결과 계산 함수 호출
         calculateResults();
-      }, 100); // alert가 다른 로직과 겹치지 않도록 약간의 지연을 줌
+      }, 100);
     }
-  }, [balance, position, currentPrice, leverage, calculateResults]); // 의존성 배열에 필요한 모든 변수 추가
+  }, [balance, position, currentPrice, leverage, calculateResults]);
 
   const changeSpeed = (speed) => {
     setPlaybackSpeed(speed);
@@ -384,9 +337,8 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
     );
   }
 
-
   return (
-    <div className="grid gap-4" style={{ height: '100vh', gridTemplateRows: 'auto auto 1fr' }}>
+    <div className="trading-screen-container">
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <TrendingUp className="text-green" />
@@ -413,45 +365,44 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
         <div className="progress-fill" style={{ width: `${progress}%` }}></div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '16px', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateRows: '3fr 1fr', gap: '16px', overflow: 'hidden' }}>
-            <div className="card" style={{ overflow: 'auto' }}>
-                <Chart 
-                    data={chartData}
-                    currentPrice={currentPrice}
-                    coinSymbol={config.selectedCoin}
-                    timeframe={currentTimeframe?.label || config.selectedTimeframe}
-                    position={position}
-                />
-            </div>
-            <div className="card" style={{ overflow: 'auto' }}>
-                <PositionInfo
-                    position={position}
-                    currentPrice={currentPrice}
-                    trades={trades}
-                    coinSymbol={config.selectedCoin}
-                />
-            </div>
+      <div className="trading-screen-grid-areas">
+        <div className="card chart-area" style={{ overflow: 'auto' }}>
+          <Chart 
+            data={chartData}
+            currentPrice={currentPrice}
+            coinSymbol={config.selectedCoin}
+            timeframe={currentTimeframe?.label || config.selectedTimeframe}
+            position={position}
+            timeframeMs={currentTimeframe?.ms}
+          />
         </div>
-        <div className="card" style={{ overflow: 'auto' }}>
-            <TradingPanel
-                currentPrice={currentPrice}
-                balance={balance}
-                position={position}
-                onOpenPosition={openPosition}
-                onClosePosition={closePosition}
-                isPlaying={isPlaying}
-                onTogglePlay={togglePlay}
-                playbackSpeed={playbackSpeed}
-                onChangeSpeed={changeSpeed}
-                coinSymbol={config.selectedCoin}
-                leverage={leverage}
-                onLeverageChange={setLeverage}
-                marginType={marginType}
-                onMarginTypeChange={setMarginType}
-            />
+        <div className="card trading-panel-area" style={{ overflow: 'auto' }}>
+          <TradingPanel
+            currentPrice={currentPrice}
+            balance={balance}
+            position={position}
+            onOpenPosition={openPosition}
+            onClosePosition={closePosition}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            playbackSpeed={playbackSpeed}
+            onChangeSpeed={changeSpeed}
+            coinSymbol={config.selectedCoin}
+            leverage={leverage}
+            onLeverageChange={setLeverage}
+            marginType={marginType}
+            onMarginTypeChange={setMarginType}
+          />
         </div>
-    </div>
+        <div className="card position-info-area" style={{ overflow: 'auto' }}>
+          <PositionInfo
+            position={position}
+            currentPrice={currentPrice}
+            trades={trades}
+            coinSymbol={config.selectedCoin}
+          />
+        </div>
+      </div>
     </div>
   );
 };

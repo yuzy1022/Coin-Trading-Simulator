@@ -3,14 +3,49 @@ import { Play, TrendingUp } from 'lucide-react';
 import { getAvailableTimeframes, calculateEstimatedPeriod } from '../utils/binanceApi';
 
 const MainScreen = ({ onStartGame }) => {
-  const [tradingPeriod, setTradingPeriod] = useState(500);
-  const [selectedCoin, setSelectedCoin] = useState('BTC');
-  const [selectedTimeframe, setSelectedTimeframe] = useState('4h');
+  // --- START: 수정된 부분 ---
 
-	const today = new Date().toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState('2020-01-01');
-  const [endDate, setEndDate] = useState(today);
+  // 1. 로컬 스토리지에서 저장된 설정 불러오기
+  const loadSettings = () => {
+    try {
+      const savedSettings = localStorage.getItem('coinTradingGameSettings');
+      if (savedSettings) {
+        return JSON.parse(savedSettings);
+      }
+    } catch (error) {
+      console.error("Failed to load settings from localStorage", error);
+    }
+    return null; // 저장된 설정이 없거나 오류 발생 시 null 반환
+  };
+
+  const savedSettings = loadSettings();
+  const today = new Date().toISOString().split('T')[0];
+
+  // 2. 저장된 값 또는 기본값으로 상태 초기화
+  const [tradingPeriod, setTradingPeriod] = useState(savedSettings?.tradingPeriod || 500);
+  const [selectedCoin, setSelectedCoin] = useState(savedSettings?.selectedCoin || 'BTC');
+  const [selectedTimeframe, setSelectedTimeframe] = useState(savedSettings?.selectedTimeframe || '4h');
+  const [startDate, setStartDate] = useState(savedSettings?.startDate || '2020-01-01');
+  const [endDate, setEndDate] = useState(savedSettings?.endDate || today);
   const [dateError, setDateError] = useState('');
+
+  // 3. 설정값이 변경될 때마다 로컬 스토리지에 저장
+  useEffect(() => {
+    try {
+      const settings = {
+        tradingPeriod,
+        selectedCoin,
+        selectedTimeframe,
+        startDate,
+        endDate,
+      };
+      localStorage.setItem('coinTradingGameSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.error("Failed to save settings to localStorage", error);
+    }
+  }, [tradingPeriod, selectedCoin, selectedTimeframe, startDate, endDate]);
+
+  // --- END: 수정된 부분 ---
 
   const coins = [
     { symbol: 'BTC', name: '비트코인' },

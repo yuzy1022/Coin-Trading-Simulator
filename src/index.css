@@ -12,8 +12,9 @@ body {
 }
 
 .container {
-  max-width: 1400px;
-  margin: 0 auto;
+  /* max-width: 1400px; */
+  /* margin: 0 auto; */
+  width: 100%;
   padding: 20px;
 }
 
@@ -240,5 +241,55 @@ body {
   
   .container {
     padding: 10px;
+  }
+}
+
+
+/* 트레이딩 화면 레이아웃 (데스크탑) */
+.trading-screen-container {
+  display: grid;
+  gap: 16px;
+  height: 100vh;
+  grid-template-rows: auto auto 1fr;
+}
+
+/* 데스크탑 레이아웃 (Grid Areas 사용) */
+.trading-screen-grid-areas {
+  display: grid;
+  grid-template-columns: 3fr 1fr;
+  grid-template-rows: 3fr 1fr;
+  grid-template-areas:
+    "chart  panel"
+    "info   panel";
+  gap: 16px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chart-area { grid-area: chart; }
+.position-info-area { grid-area: info; }
+.trading-panel-area { grid-area: panel; }
+
+
+/* 반응형 레이아웃 (태블릿 및 모바일) */
+@media (max-width: 1024px) {
+  .trading-screen-container {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .trading-screen-grid-areas {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    /* 모바일에서의 컴포넌트 순서 지정: 차트 -> 트레이딩 패널 -> 포지션 정보 */
+    grid-template-areas:
+      "chart"
+      "panel"
+      "info";
+    height: auto;
+  }
+  
+  .chart-area {
+    min-height: 450px; 
   }
 }
