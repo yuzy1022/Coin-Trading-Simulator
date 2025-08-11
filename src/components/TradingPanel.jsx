@@ -16,13 +16,15 @@ const TradingPanel = ({
   onLeverageChange,
   marginType,
   onMarginTypeChange,
+  inputMode,
+  onInputModeChange,
 }) => {
   // --- 포지션 오픈 관련 state ---
   const [quantityPercentage, setQuantityPercentage] = useState(10);
   const [orderQuantity, setOrderQuantity] = useState('');
 
 	// 입력 모드와 입력창 값을 위한 state
-  const [inputMode, setInputMode] = useState('quantity'); // 'quantity' 또는 'value'
+  // const [inputMode, setInputMode] = useState('quantity'); // 'quantity' 또는 'value'
   const [inputValue, setInputValue] = useState(''); // 사용자가 보는 입력창의 값
   
   // --- 포지션 청산 관련 state ---
@@ -85,26 +87,38 @@ const TradingPanel = ({
     }
   }, [balance, currentPrice, leverage, maxQuantity]);
 
-  // --- 추가된 부분: 포지션 보유 상태가 변경될 때 청산 패널의 값을 초기화 ---
+  // 포지션이 변경될 때 '청산 비율'과 '내부 수량'을 설정하는 useEffect
   useEffect(() => {
+    // 이 효과는 오직 position prop이 변경될 때만 실행됩니다.
     if (position && position.totalQuantity > 0) {
+      // 새로운 포지션이 열리면 슬라이더와 내부 계산용 수량을 100%로 설정합니다.
       const fullQuantity = position.totalQuantity;
       setClosePercentage(100);
-      setCustomCloseQuantity(fullQuantity.toFixed(4)); // 내부 계산용 수량 설정
-
-      // 현재 입력 모드에 맞춰 입력창에 표시될 값 설정
-      if (inputMode === 'quantity') {
-        setCloseInputValue(fullQuantity.toFixed(4));
-      } else { // 'value' 모드일 경우
-        setCloseInputValue((fullQuantity * validCurrentPrice).toFixed(2));
-      }
+      setCustomCloseQuantity(fullQuantity.toFixed(4));
     } else {
-      // 포지션이 없으면 모두 초기화
+      // 포지션이 없으면 모든 값을 초기화합니다.
       setClosePercentage(100);
       setCustomCloseQuantity('');
-      setCloseInputValue('');
+      setCloseInputValue(''); // 화면에 보이는 입력창도 비웁니다.
     }
-  }, [position, inputMode, validCurrentPrice]);
+  }, [position]);
+
+  // 사용자의 조작이나 가격 변동에 따라 '화면에 보이는 입력창'의 값만 업데이트하는 useEffect
+  useEffect(() => {
+    // 이 효과는 청산할 수량, 입력 모드, 현재 가격이 바뀔 때마다 실행됩니다.
+    const closeQtyNum = parseFloat(customCloseQuantity);
+
+    if (closeQtyNum > 0) {
+      if (inputMode === 'quantity') {
+        // '수량' 모드일 때는 내부 수량 값을 그대로 보여줍니다.
+        setCloseInputValue(closeQtyNum.toFixed(4));
+      } else { // 'value' 모드
+        // '가치' 모드일 때는 (수량 * 현재가)를 계산해서 보여줍니다.
+        setCloseInputValue((closeQtyNum * validCurrentPrice).toFixed(2));
+      }
+    }
+    // 이 효과는 setClosePercentage를 호출하지 않으므로, 슬라이더 값은 초기화되지 않습니다.
+  }, [customCloseQuantity, inputMode, validCurrentPrice]);
 
   const quantityAsNumber = parseFloat(orderQuantity) || 0;
   const positionValue = quantityAsNumber * validCurrentPrice;
@@ -166,32 +180,38 @@ const TradingPanel = ({
 	    }
 	};
   
-  const switchInputMode = (newMode) => {
-    if (inputMode === newMode) return;
-    setInputMode(newMode);
-
-    // --- 오픈 패널 값 변환 (기존 로직) ---
+  useEffect(() => {
+    // 이 효과는 inputMode prop이 변경될 때마다 실행되어,
+    // 현재 수량에 맞춰 입력창의 표시 값(수량 또는 가치)을 변환해줍니다.
+    
+    // 1. 포지션 오픈 패널 값 변환
     const openQty = parseFloat(orderQuantity);
-    if (!isNaN(openQty) && openQty > 0) {
-      if (newMode === 'value') {
-        setInputValue((openQty * validCurrentPrice).toFixed(2));
-      } else {
-        setInputValue(openQty.toString());
-      }
+    if (openQty > 0) {
+      setInputValue(
+        inputMode === 'value'
+          ? (openQty * validCurrentPrice).toFixed(2)
+          : openQty.toFixed(4)
+      );
     } else {
       setInputValue('');
     }
 
-    // --- 청산 패널 값 변환 (추가된 로직) ---
-    const closeQty = parseFloat(customCloseQuantity);
-    if (!isNaN(closeQty) && closeQty > 0) {
-      if (newMode === 'value') {
-        setCloseInputValue((closeQty * validCurrentPrice).toFixed(2));
-      } else {
-        setCloseInputValue(closeQty.toString());
+    // 2. 포지션 청산 패널 값 변환
+    if (position && position.totalQuantity > 0) {
+      const closeQty = parseFloat(customCloseQuantity);
+      if (closeQty > 0) {
+        setCloseInputValue(
+          inputMode === 'value'
+            ? (closeQty * validCurrentPrice).toFixed(2)
+            : closeQty.toFixed(4)
+        );
       }
-    } else {
-      setCloseInputValue('');
+    }
+  }, [inputMode]); // inputMode prop이 바뀔 때마다 실행
+
+  const switchInputMode = (newMode) => {
+    if (inputMode !== newMode) {
+      onInputModeChange(newMode); // 부모 컴포넌트의 상태를 변경
     }
   };
 

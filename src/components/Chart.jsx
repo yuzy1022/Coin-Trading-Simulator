@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createChart } from 'lightweight-charts';
 import { Settings, Eye, EyeOff, PenLine, Trash2 } from 'lucide-react'; // 아이콘 추가
 
-const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', position }) => {
+const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', position }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const candlestickSeriesRef = useRef();
   const priceLineRef = useRef(null); // 청산가 라인을 위한 ref 추가
   const entryPriceLineRef = useRef(null); //매수가 라인을 위한 ref 추가
+  const currentPriceLineRef = useRef(null); // 현재가 라인을 위한 ref 추가
   const volumeSeriesRef = useRef();
   const maSeriesRefs = useRef({});
   const dataRef = useRef(data);
@@ -209,7 +210,8 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
       wickDownColor: '#ef4444',
       wickUpColor: '#10b981',
       priceScaleId: 'right',
-      title: '현재가',
+      lastValueVisible: true,
+      lastValueVisible: false,
     });
 
     // 거래량 차트 먼저 추가 (가장 아래)
@@ -556,6 +558,34 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
     }
   }, [position]); // position 객체가 변경될 때마다 실행
 
+  // 항상 최신 현재가를 표시하는 라인 업데이트
+  useEffect(() => {
+    // latestCandle이 없거나, 차트 시리즈가 준비되지 않았다면 실행하지 않습니다.
+    if (!candlestickSeriesRef.current || !latestCandle) return;
+
+    // 이전에 그렸던 현재가 라인이 있다면 제거합니다.
+    if (currentPriceLineRef.current) {
+      candlestickSeriesRef.current.removePriceLine(currentPriceLineRef.current);
+      currentPriceLineRef.current = null;
+    }
+
+    // 캔들의 상승/하락 여부를 판단합니다.
+    const isUp = latestCandle.close >= latestCandle.open;
+    const lineColor = isUp ? '#10b981' : '#ef4444'; // 상승은 초록색, 하락은 빨간색
+
+    // 유효한 현재가가 있을 때만 새로운 라인을 그립니다.
+    if (latestCandle.close > 0) {
+      currentPriceLineRef.current = candlestickSeriesRef.current.createPriceLine({
+        price: latestCandle.close,
+        color: lineColor, // 동적으로 결정된 색상 적용
+        lineWidth: 1,
+        lineStyle: 2, // 대시선(Dashed) 스타일
+        axisLabelVisible: true,
+        title: '현재가',
+      });
+    }
+  }, [latestCandle]); // 의존성 배열을 latestCandle로 변경합니다.
+
   // 이동평균선 설정 변경 함수들
   const toggleMAVisibility = (id) => {
     setMaSettings(prev => prev.map(ma => 
@@ -651,6 +681,11 @@ const Chart = ({ data, currentPrice, coinSymbol = 'BTC', timeframe = '4시간', 
     const currentMAValues = getCurrentMAValues();
     
     if (!hoveredCandle) {
+      // currentPrice 대신 latestCandle에서 가격 정보를 가져옵니다.
+      const currentPrice = latestCandle ? latestCandle.close : 0;
+      // 캔들 색상과 동일한 로직으로 텍스트 색상을 결정합니다.
+      const priceColorClass = latestCandle && latestCandle.close >= latestCandle.open ? 'text-green' : 'text-red';
+      
       return (
         <div>
           <div className="flex justify-between items-center mb-3">

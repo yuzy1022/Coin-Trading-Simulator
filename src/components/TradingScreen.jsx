@@ -6,18 +6,35 @@ import PositionInfo from './PositionInfo';
 import { TrendingUp, Clock, DollarSign, Zap } from 'lucide-react';
 import { getAvailableTimeframes } from '../utils/binanceApi';
 
+// --- 로컬 스토리지 키 정의 ---
+const PANEL_SETTINGS_KEY = 'coinTradingPanelSettings';
+
 const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
+  // --- 추가: 로컬 스토리지에서 설정 불러오기 ---
+  const loadPanelSettings = () => {
+    try {
+      const saved = localStorage.getItem(PANEL_SETTINGS_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch (error) {
+      console.error("Failed to load panel settings from localStorage", error);
+      return null;
+    }
+  };
+  const savedPanelSettings = loadPanelSettings();
+
   const [currentIndex, setCurrentIndex] = useState(startIndex - 1);
   const [balance, setBalance] = useState(config.initialBalance);
   const [position, setPosition] = useState(null);
   const [trades, setTrades] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [leverage, setLeverage] = useState(1);
   const [liquidationPrice, setLiquidationPrice] = useState(null);
-  const [marginType, setMarginType] = useState('isolated');
+  const [playbackSpeed, setPlaybackSpeed] = useState(savedPanelSettings?.playbackSpeed || 1);
+  const [leverage, setLeverage] = useState(savedPanelSettings?.leverage || 1);
+  const [marginType, setMarginType] = useState(savedPanelSettings?.marginType || 'isolated');
+  const [inputMode, setInputMode] = useState(savedPanelSettings?.inputMode || 'quantity'); // inputMode 상태 추가
   const intervalRef = useRef(null);
   const gameEndedRef = useRef(false);
+  
 
   const isDataValid = data && Array.isArray(data) && data.length > 0 && currentIndex < data.length;
   const currentCandle = isDataValid ? data[currentIndex] : null;
@@ -41,6 +58,21 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
     if (!data) return [];
     return data.slice(0, currentIndex + 1);
   }, [data, currentIndex]);
+
+  // --- 설정이 변경될 때마다 로컬 스토리지에 저장 ---
+  useEffect(() => {
+    try {
+      const settingsToSave = {
+        playbackSpeed,
+        leverage,
+        marginType,
+        inputMode,
+      };
+      localStorage.setItem(PANEL_SETTINGS_KEY, JSON.stringify(settingsToSave));
+    } catch (error) {
+      console.error("Failed to save panel settings to localStorage", error);
+    }
+  }, [playbackSpeed, leverage, marginType, inputMode]); // 의존성 배열에 inputMode 추가
 
   useEffect(() => {
     if (isPlaying && remainingCandles > 0 && isDataValid && currentPrice > 0) {
@@ -369,7 +401,8 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
         <div className="card chart-area" style={{ overflow: 'auto' }}>
           <Chart 
             data={chartData}
-            currentPrice={currentPrice}
+            // currentPrice={currentPrice}
+            latestCandle={currentCandle}
             coinSymbol={config.selectedCoin}
             timeframe={currentTimeframe?.label || config.selectedTimeframe}
             position={position}
@@ -392,6 +425,8 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
             onLeverageChange={setLeverage}
             marginType={marginType}
             onMarginTypeChange={setMarginType}
+            inputMode={inputMode}
+            onInputModeChange={setInputMode}
           />
         </div>
         <div className="card position-info-area" style={{ overflow: 'auto' }}>
