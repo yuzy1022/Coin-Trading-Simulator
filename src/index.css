@@ -22,8 +22,8 @@ body {
   background: #1a1f2e;
   border-radius: 12px;
   padding: 20px;
-  border: 1px solid #2a3441;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  /* border: 1px solid #2a3441; */
+  /* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); */
 }
 
 .btn {
@@ -242,6 +242,52 @@ body {
   .container {
     padding: 10px;
   }
+
+
+  .chart-area {
+    .btn, .btn-sm {
+      font-size: 12px;
+    }
+
+    h3 {
+      font-size: 14px;
+    }
+
+    .btn-sm svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .text-sm {
+      font-size: 11px;
+    }
+
+    .flex.flex-wrap.gap-4.text-sm,
+    .flex.flex-wrap.gap-4.text-sm * { /* <--- * 선택자 추가 */
+      font-size: 11px !important; /* !important 추가하여 우선순위 충돌 해결 */
+      gap: 4px;
+    }
+  }
+
+  .mb-4 > .flex.justify-between.items-start {
+    flex-direction: column; 
+    align-items: flex-start; /* MA 정보가 좌측에 위치하도록 */
+    gap: 5px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .trading-screen-container {
+    h1 {
+      font-size: 12px;
+    }
+
+    span {
+      font-size: 12px;
+    }
+  }
 }
 
 
@@ -264,6 +310,10 @@ body {
   gap: 16px;
   height: 100%;
   overflow: hidden;
+}
+
+.chart-area-container {
+  min-height: 480px;
 }
 
 .chart-area { grid-area: chart; }
@@ -291,5 +341,80 @@ body {
   
   .chart-area {
     min-height: 450px; 
+  }
+}
+
+/* 모바일 가로 화면 (landscape) 전용 레이아웃 추가 */
+@media (max-width: 1024px) and (orientation: landscape) {
+  /* 가로 화면일 때 전체 컨테이너 높이를 화면에 꽉 채웁니다. */
+  .trading-screen-container {
+    height: 110vh;
+    /* 최상위 헤더와 프로그레스바를 제외한 실제 컨텐츠 영역이 넘치지 않도록 설정 */
+    grid-template-rows: auto auto 1fr; 
+  }
+
+  /* 데스크톱과 유사한 그리드 레이아웃을 다시 적용합니다. */
+  .trading-screen-grid-areas {
+    grid-template-columns: 3fr 1fr; /* 차트 3, 패널 1 비율 */
+    grid-template-rows: 5fr 2fr;
+    grid-template-areas:
+      "chart  panel"
+      "info   panel";
+    /* 🔥 FIX: 높이를 50%에서 100%로 변경하여 할당된 공간을 꽉 채웁니다. */
+    height: 100%;
+  }
+
+  /* 세로 화면에서 적용했던 차트의 고정 높이를 초기화합니다. */
+  .chart-area {
+    min-height: 0;
+
+    .flex.flex-wrap.gap-4.text-sm,
+    .flex.flex-wrap.gap-4.text-sm * { /* <--- * 선택자 추가 */
+      font-size: 11px !important; /* !important 추가하여 우선순위 충돌 해결 */
+      gap: 4px;
+    }
+
+    .mb-4 {
+      margin-bottom: 2px;
+    }
+    
+  }
+
+  .chart-area-container {
+      min-height: 0; /* 최소 높이 해제 */
+  }
+  
+  .trading-panel-area {
+    /* 🔥 NEW: 트레이딩 패널 내부의 2열 그리드를 1열로 변경하여 버튼이 세로로 쌓이게 합니다. */
+    .grid-2 {
+      grid-template-columns: 1fr;
+    }
+
+    /* 🔥 NEW: 트레이딩 패널 내부 버튼들의 글자 크기와 패딩을 줄여 공간을 확보합니다. */
+    .btn, .trading-panel-area .btn-sm {
+      font-size: 12px;
+      padding: 8px 12px;
+    }
+  }
+
+  .trading-screen-container {
+    gap: 8px;
+  }
+  .trading-screen-grid-areas {
+    gap: 8px;
+  }
+
+  .container {
+    padding: 10px;
+  }
+
+  .card {
+    padding: 8px;
+  }
+
+  .position-info-area {
+    span {
+      font-size: 14px;
+    }
   }
 }
