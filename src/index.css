@@ -264,7 +264,7 @@ body {
 
     .flex.flex-wrap.gap-4.text-sm,
     .flex.flex-wrap.gap-4.text-sm * { /* <--- * 선택자 추가 */
-      font-size: 11px !important; /* !important 추가하여 우선순위 충돌 해결 */
+      font-size: 11px !important;
       gap: 4px;
     }
   }
@@ -316,7 +316,16 @@ body {
   min-height: 480px;
 }
 
-.chart-area { grid-area: chart; }
+.chart-area { 
+  grid-area: chart;
+
+  .flex.gap-8.text-sm.mb-3 {
+    .font-bold {
+      margin-left: 2px;
+      margin-right: 4px;
+    }
+  }
+}
 .position-info-area { grid-area: info; }
 .trading-panel-area { grid-area: panel; }
 

@@ -13,6 +13,10 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
   const maSeriesRefs = useRef({});
   const dataRef = useRef(data);
 
+  const chartHeightPC = 480;
+  const chartHeightMobilePortrait = 450;
+  const chartHeightMobileLandscape = 180;
+
   // --- 추세선 기능 상태 ---
   const [isDrawing, setIsDrawing] = useState(false);
   const [trendLines, setTrendLines] = useState([]);
@@ -21,7 +25,13 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
   const [draggingHandle, setDraggingHandle] = useState(null);
   
   // --- 모바일 전용 상태 추가 ---
-  const [isMobile, setIsMobile] = useState(false); // 모바일 환경 감지
+  const [isMobile, setIsMobile] = useState(() => 
+    typeof window !== 'undefined' && 
+    (typeof window.orientation !== 'undefined' || navigator.userAgent.indexOf('IEMobile') !== -1 || ('ontouchstart' in window))
+  );
+  const [isPortrait, setIsPortrait] = useState(() => 
+      typeof window !== 'undefined' ? window.matchMedia("(orientation: portrait)").matches : false
+  );
   const [drawingStep, setDrawingStep] = useState(0); // 0: off, 1: startPoint 설정, 2: endPoint 설정
 
   const trendLinesSeriesRef = useRef(new Map());
@@ -29,7 +39,6 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
   const currentHoverPointRef = useRef(null); // NEW: 현재 드래그/호버 위치 저장 Ref
   const drawingStateRef = useRef({ isDrawing, startPoint, selectedLineId, draggingHandle, trendLines, isMobile, drawingStep });
   const isProcessingCrosshairMove = useRef(false);
-  const [isCrosshairVisible, setIsCrosshairVisible] = useState(false);
 
   const [hoveredCandle, setHoveredCandle] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -211,12 +220,26 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
     }
   };
 
-  // --- NEW: 모바일 환경 감지 (한 번만 실행) ---
   useEffect(() => {
     // 터치 이벤트 지원 여부를 통해 모바일 환경 감지 (단순한 휴리스틱)
     const isTouchDevice = typeof window.orientation !== 'undefined' || navigator.userAgent.indexOf('IEMobile') !== -1 || ('ontouchstart' in window);
     setIsMobile(isTouchDevice);
-  }, []);
+
+    // 세로 모드(portrait) 감지 및 리스너 등록
+    const mediaQuery = window.matchMedia("(orientation: portrait)");
+    const updateOrientation = (e) => setIsPortrait(e.matches);
+    
+    // 초기 값 설정
+    updateOrientation(mediaQuery); 
+    
+    // 이벤트 리스너 등록
+    mediaQuery.addEventListener('change', updateOrientation);
+
+    return () => {
+      // 클린업
+      mediaQuery.removeEventListener('change', updateOrientation);
+    };
+  }, []); // isMobile 감지 로직을 별도의 useEffect로 분리했기 때문에, 여기서는 불필요한 의존성을 제거했습니다.
 
   useEffect(() => {
     // 모바일이 아니거나, (그리기 중도 아니고 수정 중도 아닐 경우) 아무것도 하지 않음
@@ -306,7 +329,9 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
 
     // 1. Lightweight Charts 인터랙션 동적 적용
     chartRef.current.applyOptions({
-      crosshair: { mode: crosshairMode },
+      crosshair: { 
+        mode: crosshairMode,
+      },
       handleScroll: {
         pressedMouseMove: enableNormalInteractions,
         // 🔥 FIX: 그리기 모드일 때는 차트 이동을 다시 비활성화합니다.
@@ -563,29 +588,25 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
 
     // --- NEW/MODIFIED: 마우스 이동 이벤트 핸들러 (미리보기 / 드래그) ---
     chart.subscribeCrosshairMove((param) => {
-      if (param.point) {
-        setIsCrosshairVisible(true);
-      } else {
-        setIsCrosshairVisible(false);
-      }
-
       if (isProcessingCrosshairMove.current) return;
       try {
       isProcessingCrosshairMove.current = true;
       const { isDrawing, startPoint, draggingHandle, trendLines, isMobile, drawingStep } = drawingStateRef.current;
 
       // 캔들 정보 표시 로직 (기존과 동일)
-      if (param.time && dataRef.current.length > 0) {
-          const candleIndex = dataRef.current.findIndex(candle => Math.floor(candle.timestamp / 1000) === param.time);
-          if (candleIndex >= 0) {
-          const currentCandle = dataRef.current[candleIndex];
-          const previousCandle = candleIndex > 0 ? dataRef.current[candleIndex - 1] : null;
-          setHoveredCandle({ ...currentCandle, previousCandle, index: candleIndex });
-          } else {
-          setHoveredCandle(null);
-          }
-      } else {
-          setHoveredCandle(null);
+      if (!isDrawing && !draggingHandle) { //추세선 그리기나 수정중이 아닐때만 표시
+        if (param.time && dataRef.current.length > 0) {
+            const candleIndex = dataRef.current.findIndex(candle => Math.floor(candle.timestamp / 1000) === param.time);
+            if (candleIndex >= 0) {
+            const currentCandle = dataRef.current[candleIndex];
+            const previousCandle = candleIndex > 0 ? dataRef.current[candleIndex - 1] : null;
+            setHoveredCandle({ ...currentCandle, previousCandle, index: candleIndex });
+            } else {
+            setHoveredCandle(null);
+            }
+        } else {
+            setHoveredCandle(null);
+        }
       }
       
       // 유령선 및 드래그 로직
@@ -675,22 +696,67 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    const handleResize = () => {
-      if (chartRef.current && chartContainerRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
-      }
-    };
+    // const handleResize = () => {
+    //   if (chartRef.current && chartContainerRef.current) {
+    //     chartRef.current.applyOptions({
+    //       width: chartContainerRef.current.clientWidth,
+    //       height: chartContainerRef.current.clientHeight, // 👈 NEW: 높이 업데이트 추가
+    //     });
+    //     // 화면 비율이 크게 바뀌었으므로 내용에 맞게 다시 맞춥니다.
+    //     chartRef.current.timeScale().fitContent(); 
+    //   }
+    // };
 
-    window.addEventListener('resize', handleResize);
+    // window.addEventListener('resize', handleResize);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      // window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown); // 이벤트 리스너 제거
       if (chartRef.current) chartRef.current.remove();
     };
   }, []); // isMobile 감지 로직을 별도의 useEffect로 분리했기 때문에, 여기서는 불필요한 의존성을 제거했습니다.
+
+  useEffect(() => {
+        if (typeof window === 'undefined') return;
+  
+        const mediaQuery = window.matchMedia("(orientation: portrait)");
+        
+        const handleOrientationChange = (event) => {
+            // 1. isPortrait 상태만 업데이트합니다.
+            setIsPortrait(event.matches);
+            // 차트 크기 조정 로직은 여기서 제거합니다.
+        };
+  
+        mediaQuery.addEventListener('change', handleOrientationChange);
+        
+        return () => {
+            mediaQuery.removeEventListener('change', handleOrientationChange);
+        };
+        
+    }, []);
+  
+    // --- NEW: isPortrait 변경 후 차트 크기를 재조정하는 useEffect ---
+    useEffect(() => {
+      // isPortrait 값이 변경되면 실행됩니다.
+      if (chartRef.current && chartContainerRef.current) {
+          // 기존 handleResize 로직을 직접 호출합니다.
+          const resizeChart = () => {
+              chartRef.current.applyOptions({
+                  width: chartContainerRef.current.clientWidth,
+                  height: isMobile ? (isPortrait ? chartHeightMobilePortrait : chartHeightMobileLandscape) : chartHeightPC//chartContainerRef.current.clientHeight, 
+              });
+              chartRef.current.timeScale().fitContent();
+          };
+  
+          // React의 minHeight DOM 업데이트를 기다린 후 실행
+          // isPortrait가 변경되어 div의 minHeight가 업데이트된 후, 
+          // 50ms의 짧은 지연시간을 주어 DOM이 새로운 높이를 반영하도록 보장합니다.
+          const timeoutId = setTimeout(resizeChart, 50);
+  
+          return () => clearTimeout(timeoutId);
+      }
+      // isPortrait 상태에 의존하여, 이 값이 바뀔 때마다 실행되게 합니다.
+    }, [isPortrait]); 
 
 // --- MA 시리즈 제거 로직 (에러 로그 방지) ---
   // 이동평균선 업데이트
@@ -936,22 +1002,34 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
   };
 
   const formatPrice = (price) => {
-    if (coinSymbol === 'ADA') {
-      return `$${price.toFixed(4)}`;
-    }
-    return `$${price.toFixed(2)}`;
-  };
+	  // price가 유효하지 않은 값(null, undefined, 0, NaN 등)인지 확인
+	  if (price === null || price === undefined || isNaN(price)) {
+	    // 3개의 줄 바꿈 없는 공백을 반환하여 자리를 차지하게 합니다.
+	    return '\u00A0\u00A0\u00A0'; 
+	  }
+	
+	  if (coinSymbol === 'ADA') {
+	    return `$${price.toFixed(4)}`;
+	  }
+	  return `$${price.toFixed(2)}`;
+	};
 
   const formatVolume = (volume) => {
-    if (volume >= 1000000000) {
-      return `${(volume / 1000000000).toFixed(1)}B`;
-    } else if (volume >= 1000000) {
-      return `${(volume / 1000000).toFixed(1)}M`;
-    } else if (volume >= 1000) {
-      return `${(volume / 1000).toFixed(1)}K`;
-    }
-    return volume.toFixed(0);
-  };
+	  // volume이 유효하지 않은 값(null, undefined, 0, NaN 등)인지 확인
+	  if (volume === null || volume === undefined || isNaN(volume) || volume === 0) {
+	    // 3개의 줄 바꿈 없는 공백을 반환하여 자리를 차지하게 합니다.
+	    return '\u00A0\u00A0\u00A0'; 
+	  }
+	
+	  if (volume >= 1000000000) {
+	    return `${(volume / 1000000000).toFixed(1)}B`;
+	  } else if (volume >= 1000000) {
+	    return `${(volume / 1000000).toFixed(1)}M`;
+	  } else if (volume >= 1000) {
+	    return `${(volume / 1000).toFixed(1)}K`;
+	  }
+	  return volume.toFixed(0);
+	};
 
   const formatDateTime = (timestamp) => {
     if (!timestamp) return '';
@@ -1028,6 +1106,10 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
               </div>
             </div>
           </div>
+
+					<div style={{fontSize: (isMobile && isPortrait) ? '24px' : '13px'}}>
+            &nbsp;
+          </div>
           
           {/* 현재 이동평균선 값들 표시 */}
           {Object.keys(currentMAValues).length > 0 && (
@@ -1070,11 +1152,11 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
         </div>
         
         <div className="flex gap-8 text-sm mb-3">
-          <span style={{ color: '#9ca3af' }}>시가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(open)}&nbsp;&nbsp;</span></span>
-          <span style={{ color: '#9ca3af' }}>고가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(high)}&nbsp;&nbsp;</span></span>
-          <span style={{ color: '#9ca3af' }}>저가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(low)}&nbsp;&nbsp;</span></span>
-          <span style={{ color: '#9ca3af' }}>종가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(close)}&nbsp;&nbsp;</span></span>
-          <span style={{ color: '#9ca3af' }}>거래량<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatVolume(volume)}&nbsp;&nbsp;</span></span>
+          <span style={{ color: '#9ca3af' }}>시가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(open)}</span></span>
+          <span style={{ color: '#9ca3af' }}>고가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(high)}</span></span>
+          <span style={{ color: '#9ca3af' }}>저가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(low)}</span></span>
+          <span style={{ color: '#9ca3af' }}>종가<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatPrice(close)}</span></span>
+          <span style={{ color: '#9ca3af' }}>거래량<span className={`font-bold ${isUp ? 'text-green' : 'text-red'}`}>{formatVolume(volume)}</span></span>
         </div>
 
         {/* 호버된 캔들에서의 이동평균선 값들 표시 */}
@@ -1101,7 +1183,7 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
             {renderCandleInfo()}
           </div>
 
-          {(!isCrosshairVisible || !isMobile) && (
+
             <div className="flex items-center gap-2">
               <button
                 className={`btn btn-sm ${isDrawing ? 'btn-danger' : 'btn-secondary'}`}
@@ -1126,7 +1208,7 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
                 <Settings size={16} />
               </button>
             </div>
-          )}
+
         </div>
 
         {/* 이동평균선 설정 패널 */}
@@ -1198,7 +1280,7 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
         )}
       </div>
       
-      <div ref={chartContainerRef} style={{ width: '100%', height: '100%', minHeight: '480px' }} />
+      <div ref={chartContainerRef} style={{ width: '100%', height: '100%', minHeight: isMobile ? (isPortrait ? chartHeightMobilePortrait + 'px' : chartHeightMobileLandscape + 'px') : chartHeightPC + 'px'}} />
     </div>
   );
 };
