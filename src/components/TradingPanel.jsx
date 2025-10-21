@@ -362,8 +362,8 @@ const TradingPanel = ({
             <ChevronsRight size={16} /><label className="text-sm font-bold">마진 모드</label>
           </div>
           <div className="grid grid-2 gap-2">
-            <button className={`btn-sm ${marginType === 'isolated' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onMarginTypeChange('isolated')} disabled={!!position}>격리 (Cross)</button>
-            <button className={`btn-sm ${marginType === 'cross' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onMarginTypeChange('cross')} disabled={!!position}>교차 (Isolated)</button>
+            <button className={`btn-sm ${marginType === 'isolated' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onMarginTypeChange('isolated')} disabled={!!position}>격리 (Isolated)</button>
+            <button className={`btn-sm ${marginType === 'cross' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onMarginTypeChange('cross')} disabled={!!position}>교차 (Cross)</button>
           </div>
           {position && <p className="text-xs mt-1" style={{color: '#9ca3af'}}>포지션 보유 중에는 마진 모드를 변경할 수 없습니다.</p>}
         </div>

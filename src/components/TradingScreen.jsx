@@ -210,10 +210,16 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
           liqPrice = currentPrice * (1 + (1 / leverage) - maintenanceMarginRatio);
         }
       } else { // cross
+        // 교차 마진 로직 수정: 실질 레버리지를 계산합니다.
+        const positionValue = currentPrice * cleanQuantity;
+        // 실질 레버리지 = 포지션 가치 / 전체 지갑 잔고
+        const effectiveLeverage = positionValue / balance;
+
         if (type === 'long') {
-          liqPrice = currentPrice - ((margin + balance) / cleanQuantity);
+          // 격리 마진과 동일한 공식을 사용하되, 'leverage' 대신 'effectiveLeverage'를 사용합니다.
+          liqPrice = currentPrice * (1 - (1 / effectiveLeverage) + maintenanceMarginRatio);
         } else {
-          liqPrice = currentPrice + ((margin + balance) / cleanQuantity);
+          liqPrice = currentPrice * (1 + (1 / effectiveLeverage) - maintenanceMarginRatio);
         }
       }
       setLiquidationPrice(liqPrice);
@@ -242,11 +248,21 @@ const TradingScreen = ({ config, data, onEndGame, startIndex }) => {
           newLiqPrice = newAvgPrice * (1 + (1 / leverage) - maintenanceMarginRatio);
         }
       } else { // cross
-        const availableBalanceForLiq = balance;
+        // 1. 새 거래의 증거금과 수수료가 차감되기 전, 
+        //    현재 포지션을 유지하는 데 사용된 증거금(position.margin)과 
+        //    지갑에 남아있는 잔고(balance)를 더하여 '총 담보'를 계산합니다.
+        const totalCollateral = balance + position.margin;
+        
+        // 2. 새로운 평균 단가와 수량을 기준으로 '총 포지션 가치'를 계산합니다.
+        const newTotalPositionValue = newAvgPrice * newTotalQuantity;
+
+        // 3. '총 담보'를 기준으로 '새로운 실질 레버리지'를 계산합니다.
+        const newEffectiveLeverage = newTotalPositionValue / totalCollateral;
+
         if (type === 'long') {
-          newLiqPrice = newAvgPrice - ((newTotalMargin + availableBalanceForLiq) / newTotalQuantity);
+          newLiqPrice = newAvgPrice * (1 - (1 / newEffectiveLeverage) + maintenanceMarginRatio);
         } else { // 'short'
-          newLiqPrice = newAvgPrice + ((newTotalMargin + availableBalanceForLiq) / newTotalQuantity);
+          newLiqPrice = newAvgPrice * (1 + (1 / newEffectiveLeverage) - maintenanceMarginRatio);
         }
       }
 
