@@ -45,12 +45,12 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
   
   // 기본 이동평균선 설정
   const defaultMASettings = [
-    { id: 'ma7', period: 7, color: '#ff6b6b', visible: true, name: 'MA7', opacity: 1.0 },
-    { id: 'ma15', period: 15, color: '#4ecdc4', visible: true, name: 'MA15', opacity: 1.0 },
-    { id: 'ma30', period: 30, color: '#45b7d1', visible: true, name: 'MA30', opacity: 1.0 },
-    { id: 'ma60', period: 60, color: '#f9ca24', visible: false, name: 'MA60', opacity: 1.0 },
-    { id: 'ma120', period: 120, color: '#6c5ce7', visible: false, name: 'MA120', opacity: 1.0 },
-    { id: 'ma240', period: 240, color: '#fd79a8', visible: false, name: 'MA240', opacity: 1.0 }
+    { id: 'ma7', period: 7, color: '#ff6b6b', visible: true, name: 'SMA7', opacity: 1.0, type: 'SMA' },
+    { id: 'ma15', period: 15, color: '#4ecdc4', visible: true, name: 'SMA15', opacity: 1.0, type: 'SMA' },
+    { id: 'ma30', period: 30, color: '#45b7d1', visible: true, name: 'SMA30', opacity: 1.0, type: 'SMA' },
+    { id: 'ma60', period: 60, color: '#f9ca24', visible: false, name: 'SMA60', opacity: 1.0, type: 'SMA' },
+    { id: 'ma120', period: 120, color: '#6c5ce7', visible: false, name: 'SMA120', opacity: 1.0, type: 'SMA' },
+    { id: 'ma240', period: 240, color: '#fd79a8', visible: false, name: 'SMA240', opacity: 1.0, type: 'SMA' }
   ];
 
   // localStorage에서 설정 불러오기
@@ -100,9 +100,10 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
     saveMASettings(maSettings);
   }, [data, isDrawing, startPoint, selectedLineId, draggingHandle, maSettings, trendLines, isMobile, drawingStep]); // 의존성 배열에 새로운 상태 추가
 
-  // 이동평균 계산 함수
-  const calculateMA = (data, period) => {
+  // SMA 계산 함수
+  const calculateSMA = (data, period) => {
     const maData = [];
+    if (data.length < period) return maData;
     for (let i = period - 1; i < data.length; i++) {
       const sum = data.slice(i - period + 1, i + 1).reduce((acc, candle) => acc + candle.close, 0);
       const avg = sum / period;
@@ -114,20 +115,66 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
     return maData;
   };
 
+  // EMA 계산 함수
+  const calculateEMA = (data, period) => {
+    const emaData = [];
+    if (data.length < period) return emaData;
+
+    const k = 2 / (period + 1); // 스무딩 팩터
+
+    // 1. 첫 번째 EMA는 SMA로 시드
+    let sum = 0;
+    for (let i = 0; i < period; i++) {
+      sum += data[i].close;
+    }
+    let prevEma = sum / period;
+
+    emaData.push({
+      time: data[period - 1].timestamp ? Math.floor(data[period - 1].timestamp / 1000) : Date.now() / 1000,
+      value: prevEma
+    });
+
+    // 2. 두 번째부터 EMA 공식 적용
+    for (let i = period; i < data.length; i++) {
+      const currentClose = data[i].close;
+      const currentEma = (currentClose * k) + (prevEma * (1 - k));
+      emaData.push({
+        time: data[i].timestamp ? Math.floor(data[i].timestamp / 1000) : Date.now() / 1000,
+        value: currentEma
+      });
+      prevEma = currentEma; // 다음 계산을 위해 현재 EMA를 저장
+    }
+
+    return emaData;
+  };
+
+  // 이동평균 계산 (디스패처 함수)
+  const calculateMA = (data, period, type) => {
+    if (type === 'EMA') {
+      return calculateEMA(data, period);
+    }
+    // 기본값은 SMA
+    return calculateSMA(data, period);
+  };
+  // --- END: 수정된 부분 ---
+
   // 현재 이동평균 값 계산
   const getCurrentMAValues = () => {
     if (!data || data.length === 0) return {};
-    
+
     const currentMAValues = {};
     maSettings.forEach(maSetting => {
       if (maSetting.visible && data.length >= maSetting.period) {
-        const maData = calculateMA(data, maSetting.period);
+        // --- START: 수정된 부분 (SMA/EMA) ---
+        // type을 인자로 전달
+        const maData = calculateMA(data, maSetting.period, maSetting.type);
+        // --- END: 수정된 부분 ---
         if (maData.length > 0) {
           currentMAValues[maSetting.id] = maData[maData.length - 1].value;
         }
       }
     });
-    
+
     return currentMAValues;
   };
 
@@ -783,7 +830,8 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
     maSettings.forEach(maSetting => {
       if (maSetting.visible && data.length >= maSetting.period && chartRef.current) {
         try {
-          const maData = calculateMA(data, maSetting.period);
+          // type을 인자로 전달
+          const maData = calculateMA(data, maSetting.period, maSetting.type);
           const series = chartRef.current.addLineSeries({
             color: getColorWithOpacity(maSetting.color, maSetting.opacity),
             lineWidth: 2,
@@ -977,11 +1025,12 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
     ));
   };
 
+  // MA 기간 변경 (이름도 함께 변경)
   const updateMAPeriod = (id, period) => {
     const numPeriod = parseInt(period);
     if (numPeriod > 0 && numPeriod <= 500) {
       setMaSettings(prev => prev.map(ma => 
-        ma.id === id ? { ...ma, period: numPeriod, name: `MA${numPeriod}` } : ma
+        ma.id === id ? { ...ma, period: numPeriod, name: `${ma.type}${numPeriod}` } : ma
       ));
     }
   };
@@ -999,6 +1048,13 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
         ma.id === id ? { ...ma, opacity: numOpacity } : ma
       ));
     }
+  };
+
+  // MA 타입 변경 (이름도 함께 변경)
+  const updateMAType = (id, type) => {
+    setMaSettings(prev => prev.map(ma => 
+      ma.id === id ? { ...ma, type: type, name: `${type}${ma.period}` } : ma
+    ));
   };
 
   const formatPrice = (price) => {
@@ -1249,6 +1305,23 @@ const Chart = ({ data, latestCandle, coinSymbol = 'BTC', timeframe = '4시간', 
                       className="w-8 h-8 rounded cursor-pointer"
                       style={{ border: '1px solid #374151' }}
                     />
+
+                    <div className="flex gap-1 ml-auto">
+                      <button
+                        className={`btn btn-sm ${ma.type === 'SMA' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => updateMAType(ma.id, 'SMA')}
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                      >
+                        SMA
+                      </button>
+                      <button
+                        className={`btn btn-sm ${ma.type === 'EMA' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => updateMAType(ma.id, 'EMA')}
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                      >
+                        EMA
+                      </button>
+                    </div>
                   </div>
 
                   <div>
